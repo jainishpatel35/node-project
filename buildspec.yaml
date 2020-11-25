@@ -1,0 +1,58 @@
+version:      0.2 
+ 
+phases: 
+  install:
+    runtime-versions:
+        nodejs: 8
+        java: corretto8
+    commands: 
+    - apt-get update 
+    - apt-get install build-essential libssl-dev
+    - pip install awscli==1.16.141
+    - node --version
+    - npm --version
+    - sudo bash $CODEBUILD_SRC_DIR/nvm.sh 
+    
+  build: 
+    commands:
+    - cd $HOME
+    - echo $HOME
+    - echo $CODEBUILD_SRC_DIR
+    # - rm /bin/sh && ln -s /bin/bash /bin/sh
+    - ls -lrta
+    - nvm install 8.10
+    - nvm use v8.10
+    - npm install -g pnpm@3.5.3 typescript
+    - npm install @types/node --save
+    - sudo npm install -g winston ow inversify superagent config
+    - export NODE_PATH=/root/.nvm/versions/node/v8.10.0/lib/node_modules/
+    - sudo chmod 755 -R $NODE_PATH
+    - cd cdf-clients
+    - pnpm i --force
+    - pnpm recursive run build
+    - pnpm i --no-lock --prod --shamefully-flatten --force
+    - cd ../cdf-facade-cummins
+    - pnpm run bundle
+    - echo "Current path=$(pwd)"
+    - ls -lrt
+    - cd ..
+    - aws cloudformation package 
+      --template-file cloudformation/environment.yml 
+      --s3-bucket ${S3Bucket} 
+      --s3-prefix builds
+      --kms-key-id ${KMSKey}
+      --output-template-file transformed-template.yml
+    - aws cloudformation package
+      --template-file environment.yaml
+      --s3-bucket ${CrossRegionBucket}
+      --s3-prefix builds
+      --kms-key-id ${KMS_KEY_ProdRegion}
+      --output-template-file transformed-template-us-east-2.yaml
+
+artifacts:
+  files:
+    - '**/*'
+
+cache: 
+  paths: 
+  - '/root/.m2/**/*'
